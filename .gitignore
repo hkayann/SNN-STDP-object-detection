@@ -1,0 +1,25 @@
+# Datasets / caches / big binaries
+caches/
+*.pt
+
+# Results: keep metrics & summary, ignore raw logs
+results/*.log
+# (comment the next line if you want to track images/artifacts)
+results/*.png
+results/*.jpg
+
+# Python junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual envs
+.venv/
+venv/
+ENV/
+env/
+
+# Editors/OS
+.vscode/
+.DS_Store

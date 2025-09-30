@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "run_name": "linear_voxT5_lr0.01_wd0_b64_s2",
+    "log_path": "/workspace/results/20250929-230228_linear_voxT5_lr0.01_wd0_b64_s2.log",
+    "model": "linear",
+    "W": 120,
+    "H": 100,
+    "time_bins": 5,
+    "per_class_train": 999999,
+    "per_class_test": 999999,
+    "epochs": 20,
+    "batch_size": 64,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "seed": 2,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.771755576133728,
+    "cm": [
+      [
+        6625,
+        1797
+      ],
+      [
+        2132,
+        6660
+      ]
+    ]
+  }
+}

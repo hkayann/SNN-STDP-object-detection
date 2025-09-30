@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "run_name": "linear_hist_lr0.01_wd0.0001_b128_s1",
+    "log_path": "/workspace/results/20250929-213335_linear_hist_lr0.01_wd0.0001_b128_s1.log",
+    "model": "linear",
+    "W": 120,
+    "H": 100,
+    "time_bins": 1,
+    "per_class_train": 999999,
+    "per_class_test": 999999,
+    "epochs": 20,
+    "batch_size": 128,
+    "lr": 0.01,
+    "weight_decay": 0.0001,
+    "seed": 1,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.6792727112770081,
+    "cm": [
+      [
+        7822,
+        600
+      ],
+      [
+        4921,
+        3871
+      ]
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../mnt"
+		},
+		{
+			"path": "../opt/venvs/jelly/lib/python3.11/site-packages/spikingjelly"
+		}
+	],
+	"settings": {}
+}

@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "run_name": "baseline_histogram",
+    "log_path": "/workspace/results/20250929-185751_baseline_histogram.log",
+    "model": "linear",
+    "W": 120,
+    "H": 100,
+    "time_bins": 1,
+    "per_class_train": 999999,
+    "per_class_test": 999999,
+    "epochs": 20,
+    "batch_size": 64,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "seed": 0,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.7771000266075134,
+    "cm": [
+      [
+        6737,
+        1685
+      ],
+      [
+        2152,
+        6640
+      ]
+    ]
+  }
+}
