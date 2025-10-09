@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "run_name": "cnn_hist_lr0.003_wd0_b64_s2",
+    "log_path": "/workspace/results/20250930-085833_cnn_hist_lr0.003_wd0_b64_s2.log",
+    "model": "cnn",
+    "W": 120,
+    "H": 100,
+    "time_bins": 1,
+    "per_class_train": 999999,
+    "per_class_test": 999999,
+    "epochs": 20,
+    "batch_size": 64,
+    "lr": 0.003,
+    "weight_decay": 0.0,
+    "seed": 2,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.4939002990722656,
+    "cm": [
+      [
+        8413,
+        9
+      ],
+      [
+        8703,
+        89
+      ]
+    ]
+  }
+}

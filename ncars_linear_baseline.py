@@ -10,6 +10,7 @@ from torch import nn
 from torch.utils.data import TensorDataset, DataLoader
 from typing import Tuple
 from tqdm import tqdm
+from time import perf_counter
 
 # helpers from your repo
 from utils import (
@@ -76,10 +77,13 @@ def _sample_indices(raw, n: int):
 # ------------------------
 # Feature builders
 # ------------------------
+# ...existing code...
+
+# --- Replace this function ---
 def window_to_pol_voxel(raw, idx: int, W: int, H: int, time_bins: int) -> np.ndarray:
+    # Vectorized version from snn.py
     file_idx, t_start, t_end, _ = raw["index"][idx]
     window_us = max(1, int(t_end - t_start))
-
     ts = raw["data"][file_idx]["ts"]
     addr = raw["data"][file_idx]["addr"]
 
@@ -91,18 +95,30 @@ def window_to_pol_voxel(raw, idx: int, W: int, H: int, time_bins: int) -> np.nda
     addr_w = addr[m]
 
     x, y, p = decode_addr_to_xy_p(addr_w)
+    x = x.astype(np.int64)
+    y = y.astype(np.int64)
     pol = (p > 0).astype(np.int64)
 
     rel = ts_w - t_start
     bin_idx = np.floor(rel * time_bins / window_us).astype(np.int64)
     bin_idx = np.clip(bin_idx, 0, time_bins - 1)
 
-    vox = np.zeros((H, W, 2 * time_bins), dtype=np.float32)
-    for xi, yi, pol_i, bi in zip(x, y, pol, bin_idx):
-        if 0 <= xi < W and 0 <= yi < H:
-            c = pol_i + 2 * bi
-            vox[yi, xi, c] += 1.0
-    return vox
+    valid = (x >= 0) & (x < W) & (y >= 0) & (y < H)
+    if not np.any(valid):
+        return np.zeros((H, W, 2 * time_bins), dtype=np.float32)
+    x = x[valid]
+    y = y[valid]
+    pol = pol[valid]
+    bin_idx = bin_idx[valid]
+
+    ch = pol + 2 * bin_idx
+    flat_idx = ((y * W + x) * (2 * time_bins) + ch).astype(np.int64)
+    vox_flat = np.zeros(H * W * 2 * time_bins, dtype=np.uint32)
+    np.add.at(vox_flat, flat_idx, 1)
+    return vox_flat.reshape(H, W, 2 * time_bins).astype(np.float32)
+# --- End replacement ---
+
+# ...rest of your code...
 
 def _build_split(
     raw_pos,
@@ -118,26 +134,15 @@ def _build_split(
     pos_idx = _sample_indices(raw_pos, n_pos)
     neg_idx = _sample_indices(raw_neg, n_neg)
 
-    if time_bins <= 1:
-        for i in tqdm(pos_idx, desc="Building + class (hist)", leave=False):
-            hist = window_to_pol_hist(raw_pos, i, W, H)  # (H,W,2)
-            X_list.append(hist)
-            y_list.append(1)
-        for i in tqdm(neg_idx, desc="Building - class (hist)", leave=False):
-            hist = window_to_pol_hist(raw_neg, i, W, H)
-            X_list.append(hist)
-            y_list.append(0)
-        C_out = 2
-    else:
-        for i in tqdm(pos_idx, desc=f"Building + class (vox T={time_bins})", leave=False):
-            vox = window_to_pol_voxel(raw_pos, i, W, H, time_bins)  # (H,W,2*T)
-            X_list.append(vox)
-            y_list.append(1)
-        for i in tqdm(neg_idx, desc=f"Building - class (vox T={time_bins})", leave=False):
-            vox = window_to_pol_voxel(raw_neg, i, W, H, time_bins)
-            X_list.append(vox)
-            y_list.append(0)
-        C_out = 2 * time_bins
+    for i in tqdm(pos_idx, desc=f"Building + class (vox T={time_bins})", leave=False):
+        vox = window_to_pol_voxel(raw_pos, i, W, H, time_bins)  # always use vectorized
+        X_list.append(vox)
+        y_list.append(1)
+    for i in tqdm(neg_idx, desc=f"Building - class (vox T={time_bins})", leave=False):
+        vox = window_to_pol_voxel(raw_neg, i, W, H, time_bins)
+        X_list.append(vox)
+        y_list.append(0)
+    C_out = 2 * time_bins
 
     X = np.stack(X_list, axis=0)  # (N,H,W,C)
     sums = X.sum(axis=(1, 2, 3), keepdims=True)
@@ -150,6 +155,21 @@ def _build_split(
     return X, y
 
 # ------------------------
+# Norm helper
+# ------------------------
+def _make_norm(kind: str, num_channels: int):
+    kind = (kind or "bn").lower()
+    if kind == "bn":
+        return nn.BatchNorm2d(num_channels)
+    if kind == "gn":
+        groups = 8 if num_channels % 8 == 0 else 4
+        return nn.GroupNorm(groups, num_channels)
+    if kind == "ln":
+        # LayerNorm over channels: GroupNorm with 1 group is equivalent & fast
+        return nn.GroupNorm(1, num_channels)
+    return nn.Identity()
+
+# ------------------------
 # Models
 # ------------------------
 class LinearHead(nn.Sequential):
@@ -158,33 +178,32 @@ class LinearHead(nn.Sequential):
 
 class TinyCNN(nn.Module):
     """
-    Very small CNN with BatchNorm:
-      Conv → BN → ReLU → Conv → BN → ReLU → GAP → Linear
+    Very small CNN with selectable normalization:
+      Conv → Norm → ReLU → Conv → Norm → ReLU → GAP → Linear
     """
-    def __init__(self, in_ch: int):
+    def __init__(self, in_ch: int, norm: str = "bn"):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(in_ch, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-
+        self.conv1 = nn.Conv2d(in_ch, 32, kernel_size=3, padding=1, bias=False)
+        self.norm1 = _make_norm(norm, 32)
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False)
+        self.norm2 = _make_norm(norm, 32)
+        self.relu  = nn.ReLU(inplace=True)
+        self.head  = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
             nn.Linear(32, 2),
         )
 
     def forward(self, x):
-        return self.net(x)
+        x = self.relu(self.norm1(self.conv1(x)))
+        x = self.relu(self.norm2(self.conv2(x)))
+        return self.head(x)
 
-def build_model(model_name: str, C: int, H: int, W: int) -> nn.Module:
+def build_model(model_name: str, C: int, H: int, W: int, norm: str = "bn") -> nn.Module:
     if model_name == "linear":
         return LinearHead(C, H, W)
     elif model_name == "cnn":
-        return TinyCNN(C)
+        return TinyCNN(C, norm=norm)
     else:
         raise ValueError(f"Unknown --model {model_name!r} (use 'linear' or 'cnn')")
 
@@ -202,14 +221,15 @@ def train_and_eval(
     lr: float = 1e-2,
     weight_decay: float = 0.0,
     num_workers: int = 8,
+    norm: str = "bn",
 ):
     Ntr, C, H, W = Xtr.shape
-    model = build_model(model_name, C, H, W).to(device)
+    model = build_model(model_name, C, H, W, norm=norm).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_fn = nn.CrossEntropyLoss()
 
     train_loader = DataLoader(
-        TensorDataset(Xtr, ytr),  # keep (N,C,H,W); model handles flatten if needed
+        TensorDataset(Xtr, ytr),
         batch_size=batch_size,
         shuffle=True,
         pin_memory=(device.type == "cuda"),
@@ -294,6 +314,11 @@ def main():
     parser.add_argument("--time_bins", type=int, default=1)
     parser.add_argument("--num_workers", type=int, default=8)
     parser.add_argument("--model", choices=["linear", "cnn"], default="linear")
+    parser.add_argument("--norm", choices=["bn", "gn", "ln", "none"], default="bn",
+                        help="Normalization for CNN: batch/group/layer/none")
+    parser.add_argument("--profile_build_only", action="store_true",
+                    help="Build X/y for train+test, report timing, then exit (no training).")
+
     # logging
     parser.add_argument("--out_dir", default="/workspace/results")
     parser.add_argument("--run_name", default=None, help="optional tag for filenames")
@@ -301,8 +326,8 @@ def main():
 
     # compose run name
     tb_tag = 'hist' if args.time_bins <= 1 else f'voxT{args.time_bins}'
-    default_name = f"{args.model}_{tb_tag}_W{args.W or 'auto'}H{args.H or 'auto'}_" \
-                   f"train{args.per_class_train}_test{args.per_class_test}_seed{args.seed}"
+    default_name = (f"{args.model}_{tb_tag}_norm{args.norm}_W{args.W or 'auto'}H{args.H or 'auto'}_"
+                    f"train{args.per_class_train}_test{args.per_class_test}_seed{args.seed}")
     run_name = args.run_name or default_name
 
     # start tee logging
@@ -325,10 +350,26 @@ def main():
         print(f"[BASELINE] inferred sensor: W={W}, H={H}")
 
     mode_str = "hist (2ch)" if args.time_bins <= 1 else f"voxel (2*{args.time_bins} ch)"
+    
+    # --- Time train split creation ---
     print(f"[BASELINE] building train split…  [{mode_str}]")
+    t0 = time.perf_counter()
     Xtr, ytr = _build_split(train_cars, train_bg, args.per_class_train, args.per_class_train, W, H, args.time_bins)
+    t1 = perf_counter()
+    print(f"[TIME] build_train: {(t1 - t0):.2f}s  (N={Xtr.size(0)}, C={Xtr.size(1)}, H={H}, W={W})")
+    
+    # --- Time test split creation ---
+    t2 = perf_counter()
     print(f"[BASELINE] building test split…   [{mode_str}]")
     Xte, yte = _build_split(test_cars, test_bg, args.per_class_test, args.per_class_test, W, H, args.time_bins)
+    t3 = perf_counter()
+    print(f"[TIME] build_test : {(t3 - t2):.2f}s  (N={Xte.size(0)}, C={Xte.size(1)}, H={H}, W={W})")
+    print(f"[TIME] build_total: {(t3 - t0):.2f}s")
+
+    if args.profile_build_only:
+        print("[MODE] profile_build_only → skipping training/eval.")
+        return
+
 
     # quick sanity log
     print(f"[DEBUG] Xtr shape = {tuple(Xtr.shape)}  (N,C,H,W) | Xte shape = {tuple(Xte.shape)}")
@@ -347,6 +388,7 @@ def main():
         lr=args.lr,
         weight_decay=args.weight_decay,
         num_workers=args.num_workers,
+        norm=args.norm,
     )
 
     # save a compact metrics json + append to summary tsv
@@ -354,6 +396,7 @@ def main():
         "run_name": run_name,
         "log_path": log_path,
         "model": args.model,
+        "norm": args.norm,
         "W": W, "H": H, "time_bins": args.time_bins,
         "per_class_train": args.per_class_train,
         "per_class_test": args.per_class_test,
@@ -370,10 +413,10 @@ def main():
     print(f"[SAVE] metrics → {out_json}")
 
     summary_path = os.path.join(args.out_dir, "summary.tsv")
-    header = ("timestamp\trun_name\tmodel\tW\tH\ttime_bins\tper_class_train\tper_class_test\t"
+    header = ("timestamp\trun_name\tmodel\tW\tH\tnorm\ttime_bins\tper_class_train\tper_class_test\t"
               "epochs\tbatch\tlr\twd\tseed\tdevice\ttest_acc\tcm")
     line = (
-        f"{time.strftime('%Y-%m-%d %H:%M:%S')}\t{run_name}\t{args.model}\t{W}\t{H}\t{args.time_bins}\t"
+        f"{time.strftime('%Y-%m-%d %H:%M:%S')}\t{run_name}\t{args.model}\t{W}\t{H}\t{args.norm}\t{args.time_bins}\t"
         f"{args.per_class_train}\t{args.per_class_test}\t{args.epochs}\t{args.batch_size}\t"
         f"{args.lr}\t{args.weight_decay}\t{args.seed}\t{device.type}\t{metrics['test_acc']:.6f}\t{metrics['cm']}"
     )

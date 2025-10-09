@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "run_name": "baseline_build_voxT1",
+    "log_path": "/workspace/results/20251003-171724_baseline_build_voxT1.log",
+    "model": "linear",
+    "norm": "bn",
+    "W": 120,
+    "H": 100,
+    "time_bins": 1,
+    "per_class_train": 99999,
+    "per_class_test": 99999,
+    "epochs": 5,
+    "batch_size": 64,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "seed": 0,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.7608342170715332,
+    "cm": [
+      [
+        6586,
+        1836
+      ],
+      [
+        2281,
+        6511
+      ]
+    ]
+  }
+}

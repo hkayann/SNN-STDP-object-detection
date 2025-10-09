@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "run_name": "cnn_voxT5_lr0.01_wd0_b128_s1",
+    "log_path": "/workspace/results/20250930-111019_cnn_voxT5_lr0.01_wd0_b128_s1.log",
+    "model": "cnn",
+    "W": 120,
+    "H": 100,
+    "time_bins": 5,
+    "per_class_train": 999999,
+    "per_class_test": 999999,
+    "epochs": 20,
+    "batch_size": 128,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "seed": 1,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.7725688219070435,
+    "cm": [
+      [
+        7940,
+        482
+      ],
+      [
+        3433,
+        5359
+      ]
+    ]
+  }
+}

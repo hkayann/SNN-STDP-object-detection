@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "run_name": "cnn_voxT10_ln_b128_e40",
+    "log_path": "/workspace/results/20251001-160810_cnn_voxT10_ln_b128_e40.log",
+    "model": "cnn",
+    "norm": "ln",
+    "W": 120,
+    "H": 100,
+    "time_bins": 10,
+    "per_class_train": 999999,
+    "per_class_test": 999999,
+    "epochs": 40,
+    "batch_size": 128,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "seed": 0,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.8243871331214905,
+    "cm": [
+      [
+        7138,
+        1284
+      ],
+      [
+        1739,
+        7053
+      ]
+    ]
+  }
+}

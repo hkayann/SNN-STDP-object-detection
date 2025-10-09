@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "run_name": "confirm_voxT5_lr1e-2_wd0_b128_e40_s0",
+    "log_path": "/workspace/results/20250930-215505_confirm_voxT5_lr1e-2_wd0_b128_e40_s0.log",
+    "model": "cnn",
+    "W": 120,
+    "H": 100,
+    "time_bins": 5,
+    "per_class_train": 999999,
+    "per_class_test": 999999,
+    "epochs": 40,
+    "batch_size": 128,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "seed": 0,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.683048665523529,
+    "cm": [
+      [
+        3119,
+        5303
+      ],
+      [
+        153,
+        8639
+      ]
+    ]
+  }
+}
