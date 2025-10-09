@@ -14,6 +14,11 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Logs and figures (top-level)
+logs/
+figure/
+figures/
+
 # Virtual envs
 .venv/
 venv/
