@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "run_name": "snn_linear_stdp_full_run_T5_train1000_test1000_seed0",
+    "log_path": "/workspace/results/20251009-172215_snn_linear_stdp_full_run_T5_train1000_test1000_seed0.log",
+    "model": "snn_linear",
+    "weights": "results/stdp_full_run.pt",
+    "W": 80,
+    "H": 62,
+    "time_bins": 5,
+    "per_class_train": 1000,
+    "per_class_test": 1000,
+    "epochs": 5,
+    "batch_size": 64,
+    "lr": 0.01,
+    "weight_decay": 0.0,
+    "seed": 0,
+    "device": "cuda"
+  },
+  "metrics": {
+    "test_acc": 0.7285000085830688,
+    "cm": [
+      [
+        754,
+        246
+      ],
+      [
+        297,
+        703
+      ]
+    ]
+  }
+}

@@ -109,3 +109,16 @@ timestamp	run_name	W	H	time_bins	per_class_train	per_class_test	epochs	batch	lr	
 2025-10-03 17:31:10	baseline_build_voxT1	linear	120	100	bn	1	99999	99999	5	64	0.01	0.0	0	cuda	0.760834	[[6586, 1836], [2281, 6511]]
 2025-10-03 17:49:43	baseline_build_voxT1	linear	120	100	bn	1	99999	99999	5	64	0.01	0.0	0	cuda	0.760834	[[6586, 1836], [2281, 6511]]
 2025-10-03 19:04:16	baseline_build_voxT1	linear	120	100	bn	1	99999	99999	5	64	0.01	0.0	0	cuda	0.760834	[[6586, 1836], [2281, 6511]]
+2025-10-09 17:22:25	snn_linear_stdp_full_run_T5_train1000_test1000_seed0	snn_linear	80	62	n/a	5	1000	1000	5	64	0.01	0.0	0	cuda	0.728500	[[754, 246], [297, 703]]	results/stdp_full_run.pt
+2025-10-09 17:29:20	snn_linear_stdp_full_run_T5_train-1_test-1_seed0	snn_linear	80	62	n/a	5	-1	-1	20	64	0.01	0.0	0	cuda	0.775822	[[6574, 1848], [2011, 6781]]	results/stdp_full_run.pt
+2025-10-09 17:43:04	snn_linear_stdp_full_run_T5_train-1_test-1_seed0	snn_linear	80	62	n/a	5	-1	-1	50	64	0.01	0.0	0	cuda	0.777739	[[6386, 2036], [1790, 7002]]	results/stdp_full_run.pt
+2025-10-10 09:01:00	snn_linear_stdp_full_run_16_T5_train-1_test-1_seed0	snn_linear	80	62	n/a	5	-1	-1	50	64	0.01	0.0	0	cuda	0.778669	[[6458, 1964], [1846, 6946]]	results/stdp_full_run_16.pt
+2025-10-10 09:45:52	snn_linear_stdp_full_run_16_T5_train-1_test-1_seed0	snn_linear	120	100	n/a	5	-1	-1	50	64	0.01	0.0	0	cuda	0.799349	[[6739, 1683], [1771, 7021]]	results/stdp_full_run_16.pt
+2025-10-10 10:35:48	snn_linear_stdp_full_run_16_T5_train-1_test-1_seed0	snn_linear	120	100	n/a	5	-1	-1	100	64	0.01	0.0	0	cuda	0.796154	[[6577, 1845], [1664, 7128]]	results/stdp_full_run_16.pt
+2025-10-10 11:13:16	snn_linear_stdp_full_run_8_T5_train-1_test-1_seed0	snn_linear	120	100	n/a	5	-1	-1	100	64	0.01	0.0	0	cuda	0.796154	[[6577, 1845], [1664, 7128]]	results/stdp_full_run_8.pt
+2025-10-17 08:21:46	reservoir_64h_lr0.01_leak0.3	results/stdp_full_run_8.pt	64	0.3	1.0	0.9	-1	-1	5	1024	1024	5	0.01	0	cuda	0.495817
+2025-10-17 08:33:07	reservoir_64h_lr0.01_leak0.3	results/stdp_full_run_8.pt	64	0.3	1.0	0.9	-1	-1	5	1024	1024	5	0.01	0	cuda	0.495817
+2025-10-17 08:35:45	reservoir_64h_lr0.01_leak0.3	results/stdp_full_run_8.pt	64	0.3	1.0	0.9	-1	-1	5	1024	1024	5	0.01	0	cuda	0.49581735796444754
+2025-10-17 08:37:48	reservoir_64h_lr0.01_leak0.3	results/stdp_full_run_8.pt	64	0.3	1.0	0.9	-1	-1	5	1024	1024	50	0.01	0	cuda	0.4984896014871616
+2025-10-17 08:42:14	reservoir_64h_lr0.01_leak0.3	results/stdp_full_run_8.pt	64	0.3	1.0	0.9	-1	-1	5	1024	32	50	0.01	0	cuda	0.49802486348321134
+2025-10-17 08:47:42	reservoir_64h_lr0.01_leak0.3	results/stdp_full_run_8.pt	64	0.3	1.0	0.9	-1	-1	5	1024	1024	5	0.01	0	cuda	0.63401882188916

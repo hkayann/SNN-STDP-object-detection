@@ -1,4 +1,4 @@
-# snn_minimal_check.py
+# snn.py
 import torch
 import numpy as np
 from pathlib import Path
@@ -37,6 +37,7 @@ NUM_WINDOWS = 500
 WARMUP_WINDOWS = 200
 DEBUG_WINDOW_LIMIT = 120
 COMP_DEBUG_WINDOWS = 10
+DEBUG_EVERY = 100
 ETA = 1e-5
 LOGGER = logging.getLogger("snn_minimal_check")
 
@@ -118,9 +119,11 @@ def save_weight_grid(weights: torch.Tensor, path: str):
 
 
 class TinySTDP(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, out_channels: int = 8):
         super().__init__()
-        self.conv = torch.nn.Conv2d(2, 8, 3, padding=1, bias=False)
+        if out_channels <= 0:
+            raise ValueError("out_channels must be positive.")
+        self.conv = torch.nn.Conv2d(2, out_channels, 3, padding=1, bias=False)
         torch.nn.init.constant_(self.conv.weight, 0.05)
         self.conv.weight.add_(2e-3 * torch.randn_like(self.conv.weight))
         self.sn = neuron.LIFNode(tau=2.0, v_threshold=0.01, v_reset=0.0, detach_reset=True)
@@ -134,7 +137,8 @@ class TinySTDP(torch.nn.Module):
 
 @torch.no_grad()
 def run(num_windows: int = NUM_WINDOWS, save_weights: str | None = None,
-        full_train: bool = False, logger: logging.Logger | None = None):
+        full_train: bool = False, logger: logging.Logger | None = None,
+        out_channels: int = 8):
     _init_default_logger()
     logger = logger or LOGGER
 
@@ -167,10 +171,10 @@ def run(num_windows: int = NUM_WINDOWS, save_weights: str | None = None,
 
     logger.info(
         f"[CFG] device={device} | T={TIME_BINS} | WARMUP={WARMUP_WINDOWS} "
-        f"| full_train={full_train} | save_weights={bool(save_weights)}"
+        f"| full_train={full_train} | save_weights={bool(save_weights)} | filters={out_channels}"
     )
 
-    model = TinySTDP().to(device)
+    model = TinySTDP(out_channels=out_channels).to(device)
     win_counts = torch.zeros(model.conv.out_channels, dtype=torch.long, device=device)
     silent_windows = 0
     first_silent_win = None
@@ -181,11 +185,9 @@ def run(num_windows: int = NUM_WINDOWS, save_weights: str | None = None,
         if win_id == WARMUP_WINDOWS + 1:
             win_counts.zero_()
 
-        if win_id <= DEBUG_WINDOW_LIMIT:
+        if win_id == 1 or (win_id % DEBUG_EVERY == 0):
             voxel_sums = seq.sum(dim=(0, 2, 3)).tolist()
-            logger.info(
-                f"[DBG][vox] window={win_id} sum_pos={voxel_sums[0]:.1f} sum_neg={voxel_sums[1]:.1f}"
-            )
+            logger.info(f"[DBG][vox] window={win_id} sum_pos={voxel_sums[0]:.1f} sum_neg={voxel_sums[1]:.1f}")
 
         seq = seq.to(device)
         total_spikes = 0.0
@@ -239,7 +241,7 @@ def run(num_windows: int = NUM_WINDOWS, save_weights: str | None = None,
             )
             comp_debug_remaining -= 1
 
-        if win_id <= DEBUG_WINDOW_LIMIT:
+        if win_id == 1 or (win_id % DEBUG_EVERY == 0):
             logger.info(f"[DBG][spk] window={win_id} total_spikes={total_spikes:.1f}")
 
         with torch.no_grad():
@@ -254,6 +256,26 @@ def run(num_windows: int = NUM_WINDOWS, save_weights: str | None = None,
 
         model.reset_state()
 
+        # --- periodic telemetry ---
+        if win_id % DEBUG_EVERY == 0 or win_id == total_windows:
+            wc_tensor = win_counts.detach().cpu()
+            total = float(wc_tensor.sum().item())
+            if total > 0:
+                probs = wc_tensor / total
+                entropy = float((-probs[probs > 0] * torch.log2(probs[probs > 0])).sum().item())
+            else:
+                entropy = 0.0
+            logger.info(f"[WTA] window={win_id} counts={wc_tensor.tolist()} sum={total:.0f} entropy={entropy:.4f}")
+
+        # --- periodic checkpoints (lightweight IO) ---
+        if (win_id % 1000 == 0 or win_id == total_windows) and save_weights:
+            logger.info(f"[SAVE] checkpoint @ window {win_id}")
+            w_cpu = model.conv.weight.detach().cpu()
+            cp_path = Path(save_weights).parent / f"stdp_conv_weights_win{win_id}.pt"
+            torch.save(w_cpu, cp_path)
+            grid_path = Path('/workspace/figures') / f"snn_filters_win{win_id}.png"
+            save_weight_grid(w_cpu, str(grid_path))
+        
         if win_id <= WARMUP_WINDOWS:
             silent_windows = 0
         else:
@@ -265,25 +287,22 @@ def run(num_windows: int = NUM_WINDOWS, save_weights: str | None = None,
             else:
                 silent_windows = 0
 
-        logged_wta = False
-        if win_id % 100 == 0 or win_id == total_windows:
-            wc_tensor = win_counts.detach().cpu()
-            total = float(wc_tensor.sum().item())
-            entropy = 0.0
-            if total > 0:
-                probs = wc_tensor / total
-                entropy = float((-probs[probs > 0] * torch.log2(probs[probs > 0])).sum().item())
-            wc_list = wc_tensor.tolist()
-            logger.info(f"[WTA] win_counts={wc_list} sum={total:.0f} entropy={entropy:.4f}")
-            logged_wta = True
-
         if silent_windows >= 20:
-            if not logged_wta:
-                wc = win_counts.detach().cpu().tolist()
-                logger.info(f"[WTA] win_counts={wc} sum={sum(wc)}")
+            wc = win_counts.detach().cpu().tolist()
+            logger.info(f"[WTA] win_counts={wc} sum={sum(wc)}")
             logger.warning(f"[EARLY-STOP] {silent_windows} silent windows in a row — stopping.")
             break
 
+    # Final WTA summary
+    wc_tensor = win_counts.detach().cpu()
+    total = float(wc_tensor.sum().item())
+    if total > 0:
+        probs = wc_tensor / total
+        entropy = float((-probs[probs > 0] * torch.log2(probs[probs > 0])).sum().item())
+    else:
+        entropy = 0.0
+    logger.info(f"[WTA] win_counts={wc_tensor.tolist()} sum={total:.0f} entropy={entropy:.4f}")
+    
     save_weight_grid(model.conv.weight, '/workspace/figures/snn_filters.png')
 
     w = model.conv.weight.detach().cpu()
@@ -302,6 +321,8 @@ if __name__ == "__main__":
                         help="Where to save learned conv weights (set empty string to skip)")
     parser.add_argument("--full_train", action="store_true",
                         help="Stream every cached train window once without replacement")
+    parser.add_argument("--filters", type=int, default=8,
+                        help="Number of convolution filters / output channels")
     parser.add_argument("--log_path", type=str, default="",
                         help="Optional path for the log file (defaults to logs/snn_minimal_check_<timestamp>.log)")
     args = parser.parse_args()
@@ -315,4 +336,5 @@ if __name__ == "__main__":
 
     logger = setup_logger(log_path)
 
-    run(num_windows=args.num_windows, save_weights=save_path, full_train=args.full_train, logger=logger)
+    run(num_windows=args.num_windows, save_weights=save_path, full_train=args.full_train, logger=logger,
+        out_channels=args.filters)
